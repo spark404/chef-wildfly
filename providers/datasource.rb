@@ -39,7 +39,21 @@ private
 
 def datasource_exists?(name)
   Chef::Log.info "datasource_exists"
-  false
+  resource = bash "check_datasource" do
+    user "wildfly"
+    cwd "/opt/wildfly"
+    code <<-EOH
+      bin/jboss-cli.sh -c ' /subsystem=datasources/data-source=#{name}:read-resource'
+    EOH
+    action :nothing
+    returns 0
+  end
+  begin
+    resource.run_action(:run)
+    return true
+  rescue
+    return false
+  end
 end
 
 def create_datasource
@@ -55,4 +69,11 @@ end
 
 def delete_datasource
   Chef::Log.info "delete_datasource"
+  bash "remove_datasource" do
+    user "wildfly"
+    cwd  "/opt/wildfly"
+    code <<-EOH
+      bin/jboss-cli.sh -c command="data-source remove --name=#{new_resource.name}"
+    EOH
+  end
 end
