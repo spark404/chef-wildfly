@@ -1,3 +1,5 @@
+require 'etc'
+
 # Support whyrun
 def whyrun_supported?
   true
@@ -30,7 +32,7 @@ def load_current_resource
   @current_resource.drivername(@new_resource.drivername)
   @current_resource.connectionurl(@new_resource.connectionurl)
   if datasource_exists?(@current_resource.name)
-    # TODO: Set @current_resource port properties from registry
+    # TODO: Set @current_resource port properties from command output
     @current_resource.exists = true
   end
 end
@@ -38,29 +40,14 @@ end
 private
 
 def datasource_exists?(name)
-  Chef::Log.info "datasource_exists"
-  resource = bash "check_datasource" do
-    user "wildfly"
-    cwd "/opt/wildfly"
-    code <<-EOH
-      bin/jboss-cli.sh -c ' /subsystem=datasources/data-source=#{name}:read-resource'
-    EOH
-    action :nothing
-    returns 0
-  end
-  begin
-    resource.run_action(:run)
-    return true
-  rescue
-    return false
-  end
+  result = `su #{node['wildfly']['user']} -c "#{node['wildfly']['base']}/bin/jboss-cli.sh -c ' /subsystem=datasources/data-source=#{name}:read-resource'"`
+  $?.exitstatus == 0 
 end
 
 def create_datasource
-  Chef::Log.info "create_datasource"
   bash "install_datasource" do
-    user "wildfly"
-    cwd  "/opt/wildfly"
+    user node['wildfly']['user']
+    cwd node['wildfly']['base']
     code <<-EOH
       bin/jboss-cli.sh -c command="data-source add --name=#{new_resource.name} --jndi-name=#{new_resource.jndiname} --driver-name=#{new_resource.drivername} --connection-url=#{new_resource.connectionurl}"
     EOH
@@ -68,10 +55,9 @@ def create_datasource
 end
 
 def delete_datasource
-  Chef::Log.info "delete_datasource"
   bash "remove_datasource" do
-    user "wildfly"
-    cwd  "/opt/wildfly"
+    user node['wildfly']['user']
+    cwd  node['wildfly']['base']
     code <<-EOH
       bin/jboss-cli.sh -c command="data-source remove --name=#{new_resource.name}"
     EOH
